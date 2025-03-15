@@ -1,0 +1,133 @@
+package es.studium.chat;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.Timer;
+
+public class ClienteChat extends JFrame implements ActionListener
+{
+	private static final long serialVersionUID = 1L;
+	Socket socket;
+	DataInputStream fentrada;
+	DataOutputStream fsalida;
+	String nombre;
+	static JTextField mensaje = new JTextField();
+	private JScrollPane scrollpane;
+	static JTextArea textarea;
+	JButton boton = new JButton("Enviar");
+	JButton desconectar = new JButton("Salir");
+	boolean repetir = true;
+	boolean juegoTerminado = false;
+
+	public ClienteChat(Socket socket, String nombre) {
+		super(" Conexión del cliente chat: " + nombre);
+		setLayout(null);
+		mensaje.setBounds(10, 10, 400, 30);
+		add(mensaje);
+		textarea = new JTextArea();
+		scrollpane = new JScrollPane(textarea);
+		scrollpane.setBounds(10, 50, 400, 300);
+		add(scrollpane);
+		boton.setBounds(420, 10, 100, 30);
+		add(boton);
+		desconectar.setBounds(420, 50, 100, 30);
+		add(desconectar);
+		textarea.setEditable(false);
+		boton.addActionListener(this);
+		this.getRootPane().setDefaultButton(boton);
+		desconectar.addActionListener(this);
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		this.socket = socket;
+		this.nombre = nombre;
+
+		try {
+			fentrada = new DataInputStream(socket.getInputStream());
+			fsalida = new DataOutputStream(socket.getOutputStream());
+			String texto = "SERVIDOR> " + nombre + " ha entrado al juego.";
+			fsalida.writeUTF(texto);
+		} catch (IOException ex) {
+			System.out.println("Error de E/S");
+			ex.printStackTrace();
+			System.exit(0);
+		}
+	}
+
+	public static void main(String[] args) throws Exception {
+		int puerto = 44444;
+		String nombre = JOptionPane.showInputDialog("Introduce tu nombre o nick:");
+		Socket socket = null;
+		try {
+			socket = new Socket("localhost", puerto);
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			JOptionPane.showMessageDialog(null, "Imposible conectar con el servidor\n" + ex.getMessage(), "Mensaje de Error", JOptionPane.ERROR_MESSAGE);
+			System.exit(0);
+		}
+		if (!nombre.trim().equals("")) {
+			ClienteChat cliente = new ClienteChat(socket, nombre);
+			cliente.setBounds(0, 0, 540, 400);
+			cliente.setVisible(true);
+			cliente.ejecutar();
+		} else {
+			System.out.println("El nombre está vacío...");
+		}
+	}
+
+	public void actionPerformed(ActionEvent e) {
+		if (e.getSource() == boton && !juegoTerminado) {
+			String input = mensaje.getText().trim();
+			try {
+				int apuesta = Integer.parseInt(input);
+				String texto = nombre + "> " + apuesta;
+				mensaje.setText("");
+				fsalida.writeUTF(texto);
+				boton.setEnabled(false);
+				//Boton de Enviar con Tiempo(3seg)
+				new Timer(3000, evt -> boton.setEnabled(true)).start();
+			} catch (NumberFormatException ex) {
+				JOptionPane.showMessageDialog(this, "Debes ingresar un número entero.", "Error", JOptionPane.ERROR_MESSAGE);
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
+		} else if (e.getSource() == desconectar) {
+			try {
+				fsalida.writeUTF("SERVIDOR> " + nombre + " ha salido del juego.");
+				fsalida.writeUTF("*");
+				repetir = false;
+				socket.close();
+				System.exit(0);
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
+		}
+	}
+
+	public void ejecutar() {
+		String texto = "";
+		while (repetir) {
+			try {
+				texto = fentrada.readUTF();
+				textarea.setText(texto);
+				if (texto.contains("SERVIDOR> Juego terminado")) {
+					boton.setEnabled(false);
+					juegoTerminado = true;
+				}
+			} catch (IOException ex) {
+				JOptionPane.showMessageDialog(null, "Imposible conectar con el servidor\n" + ex.getMessage(), "Mensaje de Error", JOptionPane.ERROR_MESSAGE);
+				repetir = false;
+			}
+		}
+	}
+}
+

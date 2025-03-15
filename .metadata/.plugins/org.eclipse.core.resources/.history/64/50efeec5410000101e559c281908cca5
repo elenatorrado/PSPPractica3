@@ -1,0 +1,108 @@
+package es.studium.chat;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+import java.util.Random;
+
+import javax.swing.JOptionPane;
+
+public class HiloServidor extends Thread 
+{
+	DataInputStream fentrada;
+	Socket socket;
+	boolean fin = false;
+	static int numeroSecreto = new Random().nextInt(100) + 1;
+
+	public HiloServidor(Socket socket)
+	{
+		this.socket = socket;
+		try
+		{
+			fentrada = new DataInputStream(socket.getInputStream());
+		}
+		catch (IOException e)
+		{
+			System.out.println("Error de E/S");
+			e.printStackTrace();
+		}
+	}
+
+	public void run()
+	{
+		Servidor.mensaje.setText("Número de conexiones actuales: " + Servidor.ACTUALES);
+		String texto = Servidor.textarea.getText();
+		EnviarMensajes(texto);
+
+		while(!fin)
+		{
+			try
+			{
+				String cadena = fentrada.readUTF();
+				if(cadena.trim().equals("*"))
+				{
+					Servidor.ACTUALES--;
+					Servidor.mensaje.setText("Número de conexiones actuales: " + Servidor.ACTUALES);
+					fin = true;
+				}
+				else
+				{
+					String[] partes = cadena.split("> ");
+					if (partes.length == 2) {
+						String nombre = partes[0];
+						if (cadena.contains("SERVIDOR>")) {
+							Servidor.textarea.append(cadena + "\n");
+							EnviarMensajes(Servidor.textarea.getText());
+							continue;
+						}
+						try {
+							int apuesta = Integer.parseInt(partes[1].trim());
+							String respuesta = nombre + " piensa que el número es el " + apuesta + ". ";
+
+							if (apuesta < numeroSecreto) {
+								respuesta += "Pero el número es mayor.";
+							} else if (apuesta > numeroSecreto) {
+								respuesta += "Pero el número es menor.";
+							} else {
+								respuesta += "Y HA ACERTADOOOO!!!!";
+								fin = true;
+							}
+
+							Servidor.textarea.append(respuesta + "\n");
+							EnviarMensajes(Servidor.textarea.getText());
+
+							if (fin) {
+								Servidor.mensaje.setText("Juego terminado. Número correcto: " + numeroSecreto);
+							}
+						} catch (NumberFormatException e) {
+							JOptionPane.showMessageDialog(null, "Debes enviar un número entero.", "Error", JOptionPane.ERROR_MESSAGE);
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				ex.printStackTrace();
+				fin = true;
+			}
+		}
+	}
+
+	private void EnviarMensajes(String texto)
+	{
+		for(int i = 0; i < Servidor.CONEXIONES; i++)
+		{
+			Socket socket = Servidor.tabla[i];
+			try
+			{
+				DataOutputStream fsalida = new DataOutputStream(socket.getOutputStream());
+				fsalida.writeUTF(texto);
+			}
+			catch (IOException e)
+			{
+				e.printStackTrace();
+			}
+		}
+	}
+}
